@@ -12,6 +12,7 @@ import (
 	"time"
 
 	prometheusApi "github.com/prometheus/client_golang/api"
+	corev1 "k8s.io/api/core/v1"
 )
 
 const (
@@ -49,15 +50,15 @@ func newPrometheusClient() prometheusApi.Client {
 	return client
 }
 
-func queryPrometheusPVCUtilization(client prometheusApi.Client, pvcName, namespace string) (PrometheusResponse, error) {
+func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
 	u := client.URL(apiPrefix, nil)
 	q := u.Query()
 
 	promQuery := fmt.Sprintf(
 		`kubelet_volume_stats_used_bytes{persistentvolumeclaim="%[1]s",namespace="%[2]s"}`+
 			`/kubelet_volume_stats_capacity_bytes{persistentvolumeclaim="%[1]s",namespace="%[2]s"}`,
-		pvcName,
-		namespace,
+		pvc.Name,
+		pvc.Namespace,
 	)
 	q.Set("query", promQuery)
 	encodedArgs := q.Encode()
@@ -86,10 +87,12 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvcName, namespa
 		log.Fatal(err)
 	}
 
-	return promResp, err
+	metric, err := parsePrometheusResponse(promResp, pvc)
+
+	return metric, err
 }
 
-func parsePrometheusResponse(response PrometheusResponse) (PrometheusPVCMetric, error) {
+func parsePrometheusResponse(response PrometheusResponse, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
 	// TODO: What happens when Prometheus API returns warnings?
 	switch response.Status {
 	case "error":
@@ -99,7 +102,7 @@ func parsePrometheusResponse(response PrometheusResponse) (PrometheusPVCMetric, 
 	case "success":
 		{
 			if len(response.Data.Result) == 0 {
-				return PrometheusPVCMetric{}, errors.New("prometheus api returned no metrics for this PVC")
+				return PrometheusPVCMetric{}, fmt.Errorf("prometheus api returned no metrics for %s/%s", pvc.Namespace, pvc.Name)
 			} else {
 				absoluteUsedStr, ok := response.Data.Result[0].Value[1].(string)
 				if !ok {
