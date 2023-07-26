@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	corev1 "k8s.io/api/core/v1"
@@ -30,7 +29,7 @@ func updatePVCWithNewStorageSize(kubeClient *kubernetes.Clientset, pvcToResize *
 	ctxUpdate, cancelUpdate := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancelUpdate()
 
-	log.Printf("start updating pvc: %s", pvcId)
+	logger.Infof("start updating pvc: %s", pvcId)
 	_, err := kubeClient.CoreV1().PersistentVolumeClaims(pvcToResize.Namespace).Update(ctxUpdate, pvcToResize, metav1.UpdateOptions{})
 	if err != nil {
 		if errors.Is(err, context.DeadlineExceeded) {
@@ -40,7 +39,7 @@ func updatePVCWithNewStorageSize(kubeClient *kubernetes.Clientset, pvcToResize *
 		}
 	}
 
-	log.Printf("update successful for %s, now waiting for the pvc to accept the resize", pvcId)
+	logger.Infof("update successful for %s, now waiting for the pvc to accept the resize", pvcId)
 
 	return nil
 }
@@ -55,7 +54,7 @@ func processPVCs(kubeClient *kubernetes.Clientset) {
 		pvc := item.(*corev1.PersistentVolumeClaim)
 		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 
-		log.Printf("pvc %s is pulled from the resizing queue", pvcId)
+		logger.Infof("pvc %s is pulled from the resizing queue", pvcId)
 
 		// Process the PVC
 		go func(pvc *corev1.PersistentVolumeClaim) {
@@ -64,14 +63,14 @@ func processPVCs(kubeClient *kubernetes.Clientset) {
 			// Check if the PVC is already being processed
 			_, alreadyResizing := resizingPVCs.LoadOrStore(pvcId, true)
 			if alreadyResizing {
-				log.Printf("pvc %s is already being resized", pvcId)
+				logger.Infof("pvc %s is already being resized", pvcId)
 				return
 			}
 
 			// Resize the PVC and handle errors
 			err := updatePVCWithNewStorageSize(kubeClient, pvc)
 			if err != nil {
-				log.Printf("pvc %s could not be resized, stop watching it: %s", pvcId, err)
+				logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
 				pvcsToWatch.Delete(pvcId)
 				return
 			}
@@ -81,7 +80,7 @@ func processPVCs(kubeClient *kubernetes.Clientset) {
 			pvcsQueue.Forget(pvc)
 			pvcsToWatch.Delete(pvcId)
 
-			log.Printf("pvc %s has been resized correctly, stop watching it", pvcId)
+			logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
 		}(pvc)
 
 		pvcsQueue.Done(item)

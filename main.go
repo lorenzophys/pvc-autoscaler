@@ -3,10 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
+	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -30,15 +30,28 @@ var (
 	pvcsToWatch = &sync.Map{}
 	// Workqueue for PVCs that need resizing
 	pvcsQueue = workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pvcsQueue")
+	// Logger
+	logger = logrus.New()
 )
 
 func main() {
-	kubeClient := newKubeClient()
-	log.Print("new kubernetes client created")
-	prometheusClient := newPrometheusClient()
-	log.Print("new prometheus client created")
 
-	fetchPVCsToWatch(kubeClient)
+	kubeClient, err := newKubeClient()
+	if err != nil {
+		logger.Fatalf("an error occurred while creating the Kubernetes client: %s", err)
+	}
+	logger.Info("new kubernetes client created")
+
+	prometheusClient, err := newPrometheusClient()
+	if err != nil {
+		logger.Fatalf("an error occurred while creating the Prometheus client: %s", err)
+	}
+	logger.Info("new prometheus client created")
+
+	err = fetchPVCsToWatch(kubeClient)
+	if err != nil {
+		logger.Fatalf("failed to fetch PersistentVolumeClaims: %s", err.Error())
+	}
 
 	factory := informers.NewSharedInformerFactory(kubeClient, 0)
 	pvcInformer := factory.Core().V1().PersistentVolumeClaims().Informer()
@@ -65,6 +78,7 @@ func main() {
 
 	factory.Start(wait.NeverStop)
 	factory.WaitForCacheSync(wait.NeverStop)
+	logger.Info("new informer started watching PersistentVolumeClaims resources")
 
 	go processPVCs(kubeClient)
 
@@ -78,27 +92,27 @@ func main() {
 
 			metric, err := queryPrometheusPVCUtilization(prometheusClient, pvc)
 			if err != nil {
-				log.Print(err)
+				logger.Error(err)
 			} else {
-				log.Printf("utilization of %s: %.2f%%", pvcId, metric.PVCPercentageUsed)
+				logger.Infof("utilization of %s: %.2f%%", pvcId, metric.PVCPercentageUsed)
 			}
 
 			if metric.PVCPercentageUsed >= thresholdPercentage {
 				pvcsQueue.Add(pvc)
-				log.Printf("pvc %s queued for resizing", pvcId)
+				logger.Infof("pvc %s queued for resizing", pvcId)
 			}
 			return true
 		})
 	}
 }
 
-func fetchPVCsToWatch(kubeClient *kubernetes.Clientset) {
+func fetchPVCsToWatch(kubeClient *kubernetes.Clientset) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	pvcs, err := kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	if err != nil {
-		log.Fatalf("failed to fetch PersistentVolumeClaims: %s", err.Error())
+		return err
 	}
 
 	pvcCount := 0
@@ -106,11 +120,13 @@ func fetchPVCsToWatch(kubeClient *kubernetes.Clientset) {
 		if value, ok := pvc.Annotations[PVCAutoscalerAnnotation]; ok && value == "enabled" {
 			key := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 			pvcsToWatch.Store(key, &pvc)
-			log.Printf("watching PVC: %s", key)
+			logger.Infof("watching PVC: %s", key)
 			pvcCount++
 		}
 	}
-	log.Printf("there are %d PersistentVolumeClaims with autoscaling enabled in the cluster", pvcCount)
+	logger.Infof("there are %d PersistentVolumeClaims with autoscaling enabled in the cluster", pvcCount)
+
+	return nil
 }
 
 func informerUpdateFunc(oldObj any, newObj any) {
@@ -129,13 +145,13 @@ func informerUpdateFunc(oldObj any, newObj any) {
 		if newOk && newValue == "enabled" {
 			pvcsToWatch.Delete(oldKey)
 			pvcsToWatch.Store(newKey, newPVC)
-			log.Printf("start watching %s/%s", newPVC.Namespace, newPVC.Name)
+			logger.Infof("start watching %s/%s", newPVC.Namespace, newPVC.Name)
 		}
 	}
 	if oldOk && oldValue == "enabled" { // annotation removed
 		if !newOk || newValue != "enabled" {
 			pvcsToWatch.Delete(oldKey)
-			log.Printf("stop watching %s/%s", newPVC.Namespace, newPVC.Name)
+			logger.Infof("stop watching %s/%s", newPVC.Namespace, newPVC.Name)
 		}
 	}
 	if oldOk && oldValue == "enabled" { // annotation remains, but name changes
@@ -143,7 +159,7 @@ func informerUpdateFunc(oldObj any, newObj any) {
 			if oldPVC.Name != newPVC.Name {
 				pvcsToWatch.Delete(oldKey)
 				pvcsToWatch.Store(newKey, newPVC)
-				log.Printf("start watching %s/%s", newPVC.Namespace, newPVC.Name)
+				logger.Infof("start watching %s/%s", newPVC.Namespace, newPVC.Name)
 			}
 		}
 	}

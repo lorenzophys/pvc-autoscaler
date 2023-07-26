@@ -5,16 +5,16 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-func newKubeClient() *kubernetes.Clientset {
+func newKubeClient() (*kubernetes.Clientset, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		panic(err.Error())
+		return nil, err
 	}
 
-	return clientset
+	return clientset, nil
 }

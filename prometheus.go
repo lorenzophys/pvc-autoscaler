@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"net/http"
 	"strconv"
 	"strings"
@@ -39,15 +38,15 @@ type PrometheusPVCMetric struct {
 	PVCPercentageUsed float64
 }
 
-func newPrometheusClient() prometheusApi.Client {
+func newPrometheusClient() (prometheusApi.Client, error) {
 	client, err := prometheusApi.NewClient(prometheusApi.Config{
 		Address: "http://prometheus-server.monitoring.svc.cluster.local",
 	})
 	if err != nil {
-		log.Fatalf("Error creating client: %v\n", err)
+		return nil, err
 	}
 
-	return client
+	return client, nil
 }
 
 func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
@@ -65,7 +64,7 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/query", u.String()), strings.NewReader(encodedArgs))
 	if err != nil {
-		log.Fatalf("Error creating new request: %v", err)
+		return PrometheusPVCMetric{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -76,7 +75,7 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	resp, body, err := client.Do(ctx, req)
 	if err != nil {
-		log.Fatalf("Error executing request: %v", err)
+		return PrometheusPVCMetric{}, nil
 	}
 	defer resp.Body.Close()
 
@@ -84,12 +83,15 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	err = json.Unmarshal(body, &promResp)
 	if err != nil {
-		log.Fatal(err)
+		return PrometheusPVCMetric{}, err
 	}
 
 	metric, err := parsePrometheusResponse(promResp, pvc)
+	if err != nil {
+		return PrometheusPVCMetric{}, err
+	}
 
-	return metric, err
+	return metric, nil
 }
 
 func parsePrometheusResponse(response PrometheusResponse, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
