@@ -64,7 +64,7 @@ func TestFetchPVCsToWatch(t *testing.T) {
 	err := pvcAutoscaler.fetchPVCsToWatch()
 	assert.NoError(t, err)
 
-	pvcAutoscaler.pvcsToWatch.Range(func(key, value interface{}) bool {
+	pvcAutoscaler.pvcsToWatch.Range(func(key, value any) bool {
 		pvc, ok := value.(*corev1.PersistentVolumeClaim)
 		assert.True(t, ok)
 		assert.Contains(t, []string{"default/test-pvc1", "test/test-pvc3"}, key)
