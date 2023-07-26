@@ -42,9 +42,9 @@ func (a *PVCAutoscaler) fetchPVCsToWatch() error {
 func (a *PVCAutoscaler) updatePVCWithNewStorageSize(pvcToResize *corev1.PersistentVolumeClaim) error {
 	pvcId := fmt.Sprintf("%s/%s", pvcToResize.Namespace, pvcToResize.Name)
 
-	currenStorage := pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage]
-	newStorage := float64(currenStorage.Value()) * (1 + expansion)
-	newQuantity := resource.NewQuantity(int64(newStorage), resource.DecimalSI)
+	currentStorage := pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage]
+	newStorage := int64(float64(currentStorage.Value()) * (1 + expansion))
+	newQuantity := resource.NewQuantity(newStorage, resource.BinarySI)
 
 	pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage] = *newQuantity
 
@@ -67,44 +67,48 @@ func (a *PVCAutoscaler) updatePVCWithNewStorageSize(pvcToResize *corev1.Persiste
 }
 
 func (a *PVCAutoscaler) processPVCs() {
-	for {
-		// Wait until there's a PVC in the queue
-		item, quit := a.pvcsQueue.Get()
-		if quit {
-			break
-		}
-		pvc := item.(*corev1.PersistentVolumeClaim)
+	for a.processNextItem() {
+	}
+}
+
+func (a *PVCAutoscaler) processNextItem() bool {
+	// Wait until there's a PVC in the queue
+	item, quit := a.pvcsQueue.Get()
+	if quit {
+		return false
+	}
+	pvc := item.(*corev1.PersistentVolumeClaim)
+	pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+
+	a.logger.Infof("pvc %s is pulled from the resizing queue", pvcId)
+
+	// Process the PVC
+	go func(pvc *corev1.PersistentVolumeClaim) {
 		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 
-		a.logger.Infof("pvc %s is pulled from the resizing queue", pvcId)
+		// Check if the PVC is already being processed
+		_, alreadyResizing := a.resizingPVCs.LoadOrStore(pvcId, true)
+		if alreadyResizing {
+			a.logger.Infof("pvc %s is already being resized", pvcId)
+			return
+		}
 
-		// Process the PVC
-		go func(pvc *corev1.PersistentVolumeClaim) {
-			pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
-
-			// Check if the PVC is already being processed
-			_, alreadyResizing := a.resizingPVCs.LoadOrStore(pvcId, true)
-			if alreadyResizing {
-				a.logger.Infof("pvc %s is already being resized", pvcId)
-				return
-			}
-
-			// Resize the PVC and handle errors
-			err := a.updatePVCWithNewStorageSize(pvc)
-			if err != nil {
-				a.logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
-				a.pvcsToWatch.Delete(pvcId)
-				return
-			}
-
-			// After the PVC has been processed, remove it from the map
-			a.resizingPVCs.Delete(pvcId)
-			a.pvcsQueue.Forget(pvc)
+		// Resize the PVC and handle errors
+		err := a.updatePVCWithNewStorageSize(pvc)
+		if err != nil {
+			a.logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
 			a.pvcsToWatch.Delete(pvcId)
+			return
+		}
 
-			a.logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
-		}(pvc)
+		// After the PVC has been processed, remove it from the map
+		a.resizingPVCs.Delete(pvcId)
+		a.pvcsQueue.Forget(pvc)
+		a.pvcsToWatch.Delete(pvcId)
 
-		a.pvcsQueue.Done(item)
-	}
+		a.logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
+	}(pvc)
+
+	a.pvcsQueue.Done(item)
+	return true
 }
