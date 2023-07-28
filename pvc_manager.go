@@ -63,6 +63,7 @@ func (a *PVCAutoscaler) updatePVCWithNewStorageSize(pvcToResize *corev1.Persiste
 
 func (a *PVCAutoscaler) processPVCs() {
 	for a.processNextItem() {
+		time.Sleep(a.config.pollingInterval)
 	}
 }
 
@@ -128,10 +129,11 @@ func (a *PVCAutoscaler) processNextItem() bool {
 	scaledStatus := &PVCAutoscalerStatus{
 		LastScaleTime: time.Now(),
 	}
-	_, err = scaledStatus.MarshalToAnnotation()
+	scaledSuccessfulAnnotation, err := scaledStatus.MarshalToAnnotation()
 	if err != nil {
 		a.logger.Errorf("impossible to write the status of pvc %s", pvcId)
 	}
+	pvc.Annotations[PVCAutoscalerStatusAnnotation] = scaledSuccessfulAnnotation
 
 	// After the PVC has been processed, remove it from the map
 	a.resizingPVCs.Delete(pvcId)
