@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"sync"
 	"testing"
@@ -59,7 +60,7 @@ func TestFetchPVCsToWatch(t *testing.T) {
 		logger:       logger,
 		pvcsToWatch:  &sync.Map{},
 		resizingPVCs: &sync.Map{},
-		pvcsQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		pvcsQueue:    workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
 	}
 
 	err := pvcAutoscaler.fetchPVCsToWatch()
@@ -99,7 +100,7 @@ func TestUpdatePVCWithNewStorageSize(t *testing.T) {
 		logger:       logger,
 		pvcsToWatch:  &sync.Map{},
 		resizingPVCs: &sync.Map{},
-		pvcsQueue:    workqueue.NewRateLimitingQueue(workqueue.DefaultControllerRateLimiter()),
+		pvcsQueue:    workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
 	}
 
 	err := pvcAutoscaler.updatePVCWithNewStorageSize(pvc)
@@ -111,4 +112,47 @@ func TestUpdatePVCWithNewStorageSize(t *testing.T) {
 	expectedSize := int64(12884901888)
 	updatedSize := updatedPvc.Spec.Resources.Requests[corev1.ResourceStorage]
 	assert.Equal(t, expectedSize, updatedSize.Value())
+}
+
+func TestProcessNextItem(t *testing.T) {
+	pvc := &corev1.PersistentVolumeClaim{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "test-pvc",
+			Namespace: "default",
+		},
+		Spec: corev1.PersistentVolumeClaimSpec{
+			Resources: corev1.ResourceRequirements{
+				Requests: corev1.ResourceList{
+					corev1.ResourceStorage: resource.MustParse("100Gi"),
+				},
+			},
+		},
+	}
+
+	fakeClient := fake.NewSimpleClientset(pvc)
+	logger := log.New()
+	logger.SetOutput(io.Discard)
+
+	queue := workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{})
+	queue.Add(pvc)
+
+	autoscaler := &PVCAutoscaler{
+		kubeClient:   fakeClient,
+		logger:       logger,
+		pvcsToWatch:  &sync.Map{},
+		resizingPVCs: &sync.Map{},
+		pvcsQueue:    queue,
+	}
+
+	autoscaler.processNextItem()
+
+	pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+
+	assert.False(t, queue.Len() > 0, "work queue should be empty")
+
+	_, ok := autoscaler.pvcsToWatch.Load(pvcId)
+	assert.False(t, ok, "PVC should be deleted from pvcsToWatch map")
+
+	_, ok = autoscaler.resizingPVCs.Load(pvcId)
+	assert.False(t, ok, "PVC should be deleted from resizingPVCs map")
 }

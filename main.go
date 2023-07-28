@@ -51,7 +51,7 @@ func main() {
 		logger:       logger,
 		pvcsToWatch:  &sync.Map{},
 		resizingPVCs: &sync.Map{},
-		pvcsQueue:    workqueue.NewNamedRateLimitingQueue(workqueue.DefaultControllerRateLimiter(), "pvcsQueue"),
+		pvcsQueue:    workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
 	}
 
 	err = pvcAutoscaler.fetchPVCsToWatch()

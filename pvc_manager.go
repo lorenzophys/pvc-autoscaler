@@ -11,11 +11,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type PVCStatus struct {
-	PVC *corev1.PersistentVolumeClaim
-	Err error
-}
-
 func (a *PVCAutoscaler) fetchPVCsToWatch() error {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
@@ -83,31 +78,27 @@ func (a *PVCAutoscaler) processNextItem() bool {
 	a.logger.Infof("pvc %s is pulled from the resizing queue", pvcId)
 
 	// Process the PVC
-	go func(pvc *corev1.PersistentVolumeClaim) {
-		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+	// Check if the PVC is already being processed
+	_, alreadyResizing := a.resizingPVCs.LoadOrStore(pvcId, true)
+	if alreadyResizing {
+		a.logger.Infof("pvc %s is already being resized", pvcId)
+		return true
+	}
 
-		// Check if the PVC is already being processed
-		_, alreadyResizing := a.resizingPVCs.LoadOrStore(pvcId, true)
-		if alreadyResizing {
-			a.logger.Infof("pvc %s is already being resized", pvcId)
-			return
-		}
-
-		// Resize the PVC and handle errors
-		err := a.updatePVCWithNewStorageSize(pvc)
-		if err != nil {
-			a.logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
-			a.pvcsToWatch.Delete(pvcId)
-			return
-		}
-
-		// After the PVC has been processed, remove it from the map
-		a.resizingPVCs.Delete(pvcId)
-		a.pvcsQueue.Forget(pvc)
+	// Resize the PVC and handle errors
+	err := a.updatePVCWithNewStorageSize(pvc)
+	if err != nil {
+		a.logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
 		a.pvcsToWatch.Delete(pvcId)
+		return true
+	}
 
-		a.logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
-	}(pvc)
+	// After the PVC has been processed, remove it from the map
+	a.resizingPVCs.Delete(pvcId)
+	a.pvcsQueue.Forget(pvc)
+	a.pvcsToWatch.Delete(pvcId)
+
+	a.logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
 
 	a.pvcsQueue.Done(item)
 	return true
