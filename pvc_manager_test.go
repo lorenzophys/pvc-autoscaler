@@ -1,16 +1,20 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"sync"
 	"testing"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/client-go/kubernetes/fake"
+	ktesting "k8s.io/client-go/testing"
 	"k8s.io/client-go/util/workqueue"
 
 	log "github.com/sirupsen/logrus"
@@ -95,8 +99,16 @@ func TestUpdatePVCWithNewStorageSize(t *testing.T) {
 	logger := log.New()
 	logger.SetOutput(io.Discard)
 
+	config := Config{
+		thresholdPercentage: 80,
+		expansion:           0.2,
+		pollingInterval:     10 * time.Second,
+		retryAfter:          time.Minute,
+	}
+
 	pvcAutoscaler := PVCAutoscaler{
 		kubeClient:   fakeClient,
+		config:       config,
 		logger:       logger,
 		pvcsToWatch:  &sync.Map{},
 		resizingPVCs: &sync.Map{},
@@ -115,44 +127,185 @@ func TestUpdatePVCWithNewStorageSize(t *testing.T) {
 }
 
 func TestProcessNextItem(t *testing.T) {
-	pvc := &corev1.PersistentVolumeClaim{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      "test-pvc",
-			Namespace: "default",
-		},
-		Spec: corev1.PersistentVolumeClaimSpec{
-			Resources: corev1.ResourceRequirements{
-				Requests: corev1.ResourceList{
-					corev1.ResourceStorage: resource.MustParse("100Gi"),
+	t.Run("update successful", func(t *testing.T) {
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pvc",
+				Namespace: "default",
+				Annotations: map[string]string{
+					PVCAutoscalerAnnotation: "enabled",
 				},
 			},
-		},
-	}
+			Spec: corev1.PersistentVolumeClaimSpec{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("100Gi"),
+					},
+				},
+			},
+		}
 
-	fakeClient := fake.NewSimpleClientset(pvc)
-	logger := log.New()
-	logger.SetOutput(io.Discard)
+		fakeClient := fake.NewSimpleClientset(pvc)
 
-	queue := workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{})
-	queue.Add(pvc)
+		queue := workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{})
+		queue.Add(pvc)
 
-	autoscaler := &PVCAutoscaler{
-		kubeClient:   fakeClient,
-		logger:       logger,
-		pvcsToWatch:  &sync.Map{},
-		resizingPVCs: &sync.Map{},
-		pvcsQueue:    queue,
-	}
+		logger := log.New()
+		logger.SetOutput(io.Discard)
 
-	autoscaler.processNextItem()
+		autoscaler := &PVCAutoscaler{
+			kubeClient:   fakeClient,
+			logger:       logger,
+			pvcsToWatch:  &sync.Map{},
+			resizingPVCs: &sync.Map{},
+			pvcsQueue:    queue,
+		}
 
-	pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+		autoscaler.processNextItem()
 
-	assert.False(t, queue.Len() > 0, "work queue should be empty")
+		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 
-	_, ok := autoscaler.pvcsToWatch.Load(pvcId)
-	assert.False(t, ok, "PVC should be deleted from pvcsToWatch map")
+		assert.False(t, queue.Len() > 0, "work queue should be empty")
 
-	_, ok = autoscaler.resizingPVCs.Load(pvcId)
-	assert.False(t, ok, "PVC should be deleted from resizingPVCs map")
+		_, ok := autoscaler.pvcsToWatch.Load(pvcId)
+		assert.False(t, ok, "PVC should be deleted from pvcsToWatch map")
+
+		_, ok = autoscaler.resizingPVCs.Load(pvcId)
+		assert.False(t, ok, "PVC should be deleted from resizingPVCs map")
+
+	})
+
+	t.Run("update not successful", func(t *testing.T) {
+		statusAnnotation := fmt.Sprintf("{\"lastScaleTime\": \"%v\", \"lastFailedAttempt\": \"%v\"}", time.Time{}.Format(time.RFC3339), time.Time{}.Format(time.RFC3339))
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pvc",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					PVCAutoscalerAnnotation:       "enabled",
+					PVCAutoscalerStatusAnnotation: statusAnnotation,
+				},
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("100Gi"),
+					},
+				},
+			},
+		}
+
+		// Initialize a new fake queue and add the PVC to it
+		queue := workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{})
+		queue.Add(pvc)
+
+		// Define the fake client and its behavior
+		fakeClient := fake.NewSimpleClientset(pvc)
+
+		// Mock the Update method to return an error
+		fakeClient.PrependReactor("update", "persistentvolumeclaims", func(action ktesting.Action) (bool, runtime.Object, error) {
+			return true, nil, fmt.Errorf("forced update error")
+		})
+
+		// Return the test PVC when the "get" action is called
+		fakeClient.PrependReactor("get", "persistentvolumeclaims", func(action ktesting.Action) (bool, runtime.Object, error) {
+			return true, pvc, nil
+		})
+
+		buf := new(bytes.Buffer)
+		logger := log.New()
+		logger.SetOutput(buf)
+
+		autoscaler := &PVCAutoscaler{
+			kubeClient:   fakeClient,
+			logger:       logger,
+			pvcsToWatch:  &sync.Map{},
+			resizingPVCs: &sync.Map{},
+			pvcsQueue:    queue,
+		}
+
+		// Process the PVC
+		autoscaler.processNextItem()
+
+		// Check that the error was logged
+		assert.Contains(t, buf.String(), "forced update error")
+
+		// Check the PVC annotations for the last failed attempt
+		pvc, _ = fakeClient.CoreV1().PersistentVolumeClaims("test-ns").Get(context.Background(), "test-pvc", metav1.GetOptions{})
+		assert.Contains(t, pvc.Annotations, PVCAutoscalerStatusAnnotation)
+
+		status, _ := UnmarshalStatusFromAnnotation(pvc)
+
+		assert.NotEqual(t, status.LastFailedAttempt, time.Time{})
+		assert.Equal(t, status.LastScaleTime, time.Time{})
+	})
+
+	t.Run("update not successful retry too soon", func(t *testing.T) {
+		statusAnnotation := fmt.Sprintf("{\"lastScaleTime\": \"%v\", \"lastFailedAttempt\": \"%v\"}", time.Time{}.Format(time.RFC3339), time.Now().Format(time.RFC3339))
+		pvc := &corev1.PersistentVolumeClaim{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test-pvc",
+				Namespace: "test-ns",
+				Annotations: map[string]string{
+					PVCAutoscalerAnnotation:       "enabled",
+					PVCAutoscalerStatusAnnotation: statusAnnotation,
+				},
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				Resources: corev1.ResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: resource.MustParse("100Gi"),
+					},
+				},
+			},
+		}
+
+		// Initialize a new fake queue and add the PVC to it
+		queue := workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{})
+		queue.Add(pvc)
+
+		// Define the fake client and its behavior
+		fakeClient := fake.NewSimpleClientset(pvc)
+
+		logger := log.New()
+		logger.SetOutput(io.Discard)
+
+		config := Config{
+			thresholdPercentage: 80,
+			expansion:           0.2,
+			pollingInterval:     10 * time.Second,
+			retryAfter:          time.Hour,
+		}
+
+		autoscaler := &PVCAutoscaler{
+			kubeClient:   fakeClient,
+			config:       config,
+			logger:       logger,
+			pvcsToWatch:  &sync.Map{},
+			resizingPVCs: &sync.Map{},
+			pvcsQueue:    queue,
+		}
+
+		// Process the PVC
+		autoscaler.processNextItem()
+
+		pvc, _ = fakeClient.CoreV1().PersistentVolumeClaims("test-ns").Get(context.Background(), "test-pvc", metav1.GetOptions{})
+		assert.Contains(t, pvc.Annotations, PVCAutoscalerStatusAnnotation)
+
+		status, _ := UnmarshalStatusFromAnnotation(pvc)
+
+		assert.NotEqual(t, status.LastFailedAttempt, time.Time{})
+		assert.Equal(t, status.LastScaleTime, time.Time{})
+
+		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+
+		_, ok := autoscaler.resizingPVCs.Load(pvcId)
+		assert.False(t, ok, "PVC should be deleted from resizingPVCs map")
+
+		assert.True(t, queue.Len() > 0, "work queue should not be empty")
+
+		_, ok = autoscaler.pvcsToWatch.Load(pvcId)
+		assert.False(t, ok, "PVC should not be deleted from pvcsToWatch map")
+	})
+
 }

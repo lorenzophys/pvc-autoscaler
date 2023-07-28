@@ -38,7 +38,7 @@ func (a *PVCAutoscaler) updatePVCWithNewStorageSize(pvcToResize *corev1.Persiste
 	pvcId := fmt.Sprintf("%s/%s", pvcToResize.Namespace, pvcToResize.Name)
 
 	currentStorage := pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage]
-	newStorage := int64(float64(currentStorage.Value()) * (1 + expansion))
+	newStorage := int64(float64(currentStorage.Value()) * (1 + a.config.expansion))
 	newQuantity := resource.NewQuantity(newStorage, resource.BinarySI)
 
 	pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage] = *newQuantity
@@ -77,7 +77,8 @@ func (a *PVCAutoscaler) processNextItem() bool {
 
 	a.logger.Infof("pvc %s is pulled from the resizing queue", pvcId)
 
-	// Process the PVC
+	a.pvcsQueue.Done(item)
+
 	// Check if the PVC is already being processed
 	_, alreadyResizing := a.resizingPVCs.LoadOrStore(pvcId, true)
 	if alreadyResizing {
@@ -85,12 +86,51 @@ func (a *PVCAutoscaler) processNextItem() bool {
 		return true
 	}
 
-	// Resize the PVC and handle errors
-	err := a.updatePVCWithNewStorageSize(pvc)
+	// Check the status annotation
+	status, err := UnmarshalStatusFromAnnotation(pvc)
 	if err != nil {
-		a.logger.Infof("pvc %s could not be resized, stop watching it: %s", pvcId, err)
-		a.pvcsToWatch.Delete(pvcId)
+		a.logger.Errorf("impossible to unmarshal the status of pvc %s", pvcId)
+		a.resizingPVCs.Delete(pvcId)
+		a.pvcsQueue.Add(pvc)
 		return true
+	}
+
+	islastFailedAttempt := status.LastFailedAttempt.Equal(time.Time{})
+	isUpdateNotRetryable := time.Now().Before(status.LastFailedAttempt.Add(a.config.retryAfter))
+
+	if !islastFailedAttempt && isUpdateNotRetryable {
+		a.resizingPVCs.Delete(pvcId)
+		a.pvcsQueue.Add(pvc)
+		return true
+	}
+
+	// Resize the PVC and handle errors
+	err = a.updatePVCWithNewStorageSize(pvc)
+	if err != nil {
+		a.logger.Infof("pvc %s could not be resized: %s", pvcId, err)
+		a.resizingPVCs.Delete(pvcId)
+		status := &PVCAutoscalerStatus{
+			LastFailedAttempt: time.Now(),
+		}
+		statusStr, err := status.MarshalToAnnotation()
+		if err != nil {
+			a.logger.Errorf("impossible to marshal the status of pvc %s", pvcId)
+			a.resizingPVCs.Delete(pvcId)
+			a.pvcsQueue.Add(pvc)
+			return true
+		}
+
+		pvc.Annotations[PVCAutoscalerStatusAnnotation] = statusStr
+		a.pvcsQueue.Add(pvc)
+		return true
+	}
+
+	scaledStatus := &PVCAutoscalerStatus{
+		LastScaleTime: time.Now(),
+	}
+	_, err = scaledStatus.MarshalToAnnotation()
+	if err != nil {
+		a.logger.Errorf("impossible to write the status of pvc %s", pvcId)
 	}
 
 	// After the PVC has been processed, remove it from the map
@@ -100,6 +140,5 @@ func (a *PVCAutoscaler) processNextItem() bool {
 
 	a.logger.Infof("pvc %s has been resized correctly, stop watching it", pvcId)
 
-	a.pvcsQueue.Done(item)
 	return true
 }

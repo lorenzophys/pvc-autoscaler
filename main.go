@@ -15,14 +15,20 @@ import (
 )
 
 const (
-	PVCAutoscalerAnnotation = "pvc-autoscaler.lorenzophys.io"
-	thresholdPercentage     = 80
-	expansion               = 0.2
-	pollingInterval         = 10 * time.Second
+	PVCAutoscalerAnnotation       = "pvc-autoscaler.lorenzophys.io"
+	PVCAutoscalerStatusAnnotation = "pvc-autoscaler.lorenzophys.io/status"
 )
+
+type Config struct {
+	thresholdPercentage float64
+	expansion           float64
+	pollingInterval     time.Duration
+	retryAfter          time.Duration
+}
 
 type PVCAutoscaler struct {
 	kubeClient   kubernetes.Interface
+	config       Config
 	logger       *log.Logger
 	pvcsToWatch  *sync.Map
 	resizingPVCs *sync.Map
@@ -46,8 +52,16 @@ func main() {
 	}
 	logger.Info("new prometheus client created")
 
+	config := Config{
+		thresholdPercentage: 80,
+		expansion:           0.2,
+		pollingInterval:     10 * time.Second,
+		retryAfter:          time.Minute,
+	}
+
 	pvcAutoscaler := &PVCAutoscaler{
 		kubeClient:   kubeClient,
+		config:       config,
 		logger:       logger,
 		pvcsToWatch:  &sync.Map{},
 		resizingPVCs: &sync.Map{},
@@ -68,6 +82,10 @@ func main() {
 			if _, ok := addedPVC.Annotations[PVCAutoscalerAnnotation]; ok {
 				key := fmt.Sprintf("%s/%s", addedPVC.Namespace, addedPVC.Name)
 				pvcAutoscaler.pvcsToWatch.Store(key, addedPVC)
+				err := pvcAutoscaler.initPVCAnnotations(addedPVC)
+				if err != nil {
+					logger.Errorf("failed to write status annotation to %s: %s", key, err.Error())
+				}
 			}
 		},
 		DeleteFunc: func(obj any) {
@@ -75,6 +93,7 @@ func main() {
 			if _, ok := deletedPVC.Annotations[PVCAutoscalerAnnotation]; ok {
 				key := fmt.Sprintf("%s/%s", deletedPVC.Namespace, deletedPVC.Name)
 				pvcAutoscaler.pvcsToWatch.Delete(key)
+				pvcAutoscaler.removePVCAnnotations(deletedPVC)
 			}
 		},
 		UpdateFunc: func(oldObj any, newObj any) {
@@ -120,7 +139,7 @@ func main() {
 
 	go pvcAutoscaler.processPVCs()
 
-	ticker := time.NewTicker(pollingInterval)
+	ticker := time.NewTicker(pvcAutoscaler.config.pollingInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -135,7 +154,7 @@ func main() {
 				logger.Infof("utilization of %s: %.2f%%", pvcId, metric.PVCPercentageUsed)
 			}
 
-			if metric.PVCPercentageUsed >= thresholdPercentage {
+			if metric.PVCPercentageUsed >= pvcAutoscaler.config.thresholdPercentage {
 				pvcAutoscaler.pvcsQueue.Add(pvc)
 				logger.Infof("pvc %s queued for resizing", pvcId)
 			}
