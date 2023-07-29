@@ -7,5 +7,5 @@ metadata:
 rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
-    verbs: ["get", "watch", "list", "update"]
+    verbs: ["get", "watch", "list", "update", "patch"]
 
