@@ -1,0 +1,11 @@
+image:
+  repository: lorenzophys/pvc-autoscaler
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+service:
+  type: ClusterIP
+  port: 80
+
+resources: {}
+extraLabels: {}
