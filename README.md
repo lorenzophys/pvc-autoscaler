@@ -21,7 +21,7 @@ PVC Autoscaler comes with a Helm chart for easy deployment in a Kubernetes clust
 To install the PVC Autoscaler using its Helm chart, navigate to the root directory of the repository and execute the following command:
 
 ```console
-$ helm install <release-name> ./charts -n kube-system
+helm install <release-name> ./charts -n kube-system
 ```
 
 Replace `<release-name>` with the name you'd like to give to this Helm release.

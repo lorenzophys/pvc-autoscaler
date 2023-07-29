@@ -8,4 +8,3 @@ rules:
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
     verbs: ["get", "watch", "list", "update", "patch"]
-
