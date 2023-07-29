@@ -1,0 +1,12 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "pvcautoscaler.fullname" . }}
+  labels:
+    {{- include "pvcautoscaler.labels" . | nindent 4 }}
+rules:
+  # Update this section with the permissions your application needs
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "watch", "list", "update"]
+

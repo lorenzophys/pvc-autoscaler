@@ -17,6 +17,7 @@ spec:
       labels:
         {{- include "pvcautoscaler.selectorLabels" . | nindent 8 }}
     spec:
+      serviceAccountName: {{ include "pvcautoscaler.fullname" . }}
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
