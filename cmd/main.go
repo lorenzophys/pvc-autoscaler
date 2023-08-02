@@ -5,6 +5,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_providers/providers"
 	log "github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
@@ -14,6 +15,7 @@ import (
 const (
 	PVCAutoscalerAnnotation       = "pvc-autoscaler.lorenzophys.io"
 	PVCAutoscalerStatusAnnotation = "pvc-autoscaler.lorenzophys.io/status"
+	PVCMetricsProvider            = "prometheus"
 )
 
 type Config struct {
@@ -24,12 +26,13 @@ type Config struct {
 }
 
 type PVCAutoscaler struct {
-	kubeClient   kubernetes.Interface
-	config       Config
-	logger       *log.Logger
-	pvcsToWatch  *sync.Map
-	resizingPVCs *sync.Map
-	pvcsQueue    workqueue.RateLimitingInterface
+	kubeClient      kubernetes.Interface
+	metricsProvider providers.MetricsProvider
+	config          Config
+	logger          *log.Logger
+	pvcsToWatch     *sync.Map
+	resizingPVCs    *sync.Map
+	pvcsQueue       workqueue.RateLimitingInterface
 }
 
 func main() {
@@ -43,11 +46,12 @@ func main() {
 	}
 	logger.Info("new kubernetes client created")
 
-	prometheusClient, err := newPrometheusClient()
+	metricsProvider, err := MetricsProviderFactory(PVCMetricsProvider)
 	if err != nil {
-		logger.Fatalf("an error occurred while creating the Prometheus client: %s", err)
+		logger.Fatalf("metrics provider error: %s", err)
 	}
-	logger.Info("new prometheus client created")
+
+	logger.Info("new metrics provider created")
 
 	config := Config{
 		thresholdPercentage: 80,
@@ -57,12 +61,13 @@ func main() {
 	}
 
 	pvcAutoscaler := &PVCAutoscaler{
-		kubeClient:   kubeClient,
-		config:       config,
-		logger:       logger,
-		pvcsToWatch:  &sync.Map{},
-		resizingPVCs: &sync.Map{},
-		pvcsQueue:    workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
+		kubeClient:      kubeClient,
+		metricsProvider: metricsProvider,
+		config:          config,
+		logger:          logger,
+		pvcsToWatch:     &sync.Map{},
+		resizingPVCs:    &sync.Map{},
+		pvcsQueue:       workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
 	}
 
 	err = pvcAutoscaler.fetchPVCsToWatch()
@@ -83,7 +88,7 @@ func main() {
 			pvc := value.(*corev1.PersistentVolumeClaim)
 			pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
 
-			metric, err := queryPrometheusPVCUtilization(prometheusClient, pvc)
+			metric, err := metricsProvider.QueryPVCUsage(pvc)
 			if err != nil {
 				logger.Error(err)
 			} else {

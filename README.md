@@ -2,7 +2,7 @@
 
 PVC Autoscaler is an open-source project aimed at providing autoscaling functionality to Persistent Volume Claims (PVCs) in Kubernetes environments. It allows you to automatically scale your PVCs based on your workloads and the metrics collected.
 
-Please note that PVC Autoscaler is currently in its beta phase. As such, it's not recommended for production usage at this point.
+Please note that PVC Autoscaler is currently in a heavy development phase. As such, it's not recommended for production usage at this point.
 
 ## Motivation
 
