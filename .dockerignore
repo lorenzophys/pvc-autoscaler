@@ -1,0 +1,8 @@
+bin
+dist
+charts
+local_tests
+
+.git
+.goreleaser.yaml
+coverage.*

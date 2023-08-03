@@ -18,7 +18,7 @@ vet: ## Run go vet against code.
 
 .PHONY: build
 build: fmt vet ## Build the autoscaler binary.
-	@go build -o bin/pvc-autoscaler ./...
+	@go build -o bin/pvc-autoscaler ./cmd
 
 .PHONY: run
 run: fmt vet ## Run the autoscaler locally.

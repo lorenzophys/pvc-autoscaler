@@ -30,6 +30,8 @@ func (a *PVCAutoscaler) startPVCInformer() {
 			if _, ok := deletedPVC.Annotations[PVCAutoscalerAnnotation]; ok {
 				key := fmt.Sprintf("%s/%s", deletedPVC.Namespace, deletedPVC.Name)
 				a.pvcsToWatch.Delete(key)
+				a.resizingPVCs.Delete(key)
+				a.pvcsQueue.Forget(deletedPVC)
 				a.removePVCAnnotations(deletedPVC)
 			}
 		},

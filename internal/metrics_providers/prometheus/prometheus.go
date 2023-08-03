@@ -1,4 +1,4 @@
-package main
+package prometheus
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_providers/providers"
 	prometheusApi "github.com/prometheus/client_golang/api"
 	corev1 "k8s.io/api/core/v1"
 )
@@ -17,6 +18,9 @@ import (
 const (
 	apiPrefix = "/api/v1"
 )
+
+type PrometheusProvider struct {
+}
 
 type PrometheusResponse struct {
 	Status string `json:"status"`
@@ -32,15 +36,9 @@ type PrometheusResponse struct {
 	Warnings  []string `json:"warnings"`
 }
 
-type PrometheusPVCMetric struct {
-	PVCName           string
-	PVCNamespace      string
-	PVCPercentageUsed float64
-}
-
-func newPrometheusClient() (prometheusApi.Client, error) {
+func (p *PrometheusProvider) newPrometheusClient() (prometheusApi.Client, error) {
 	client, err := prometheusApi.NewClient(prometheusApi.Config{
-		Address: "http://prometheus-server.monitoring.svc.cluster.local",
+		Address: "http://prometheus-server.monitoring.svc.cluster.local", // TODO: Make it configurable
 	})
 	if err != nil {
 		return nil, err
@@ -49,7 +47,11 @@ func newPrometheusClient() (prometheusApi.Client, error) {
 	return client, nil
 }
 
-func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
+func (p *PrometheusProvider) QueryPVCUsage(pvc *corev1.PersistentVolumeClaim) (providers.PVCMetricData, error) {
+	client, err := p.newPrometheusClient()
+	if err != nil {
+		return providers.PVCMetricData{}, err
+	}
 	u := client.URL(apiPrefix, nil)
 	q := u.Query()
 
@@ -64,7 +66,7 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	req, err := http.NewRequest(http.MethodPost, fmt.Sprintf("%s/query", u.String()), strings.NewReader(encodedArgs))
 	if err != nil {
-		return PrometheusPVCMetric{}, err
+		return providers.PVCMetricData{}, err
 	}
 
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -75,7 +77,7 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	resp, body, err := client.Do(ctx, req)
 	if err != nil {
-		return PrometheusPVCMetric{}, nil
+		return providers.PVCMetricData{}, nil
 	}
 	defer resp.Body.Close()
 
@@ -83,28 +85,28 @@ func queryPrometheusPVCUtilization(client prometheusApi.Client, pvc *corev1.Pers
 
 	err = json.Unmarshal(body, &promResp)
 	if err != nil {
-		return PrometheusPVCMetric{}, err
+		return providers.PVCMetricData{}, err
 	}
 
-	metric, err := parsePrometheusResponse(promResp, pvc)
+	metric, err := p.parsePrometheusResponse(promResp, pvc)
 	if err != nil {
-		return PrometheusPVCMetric{}, err
+		return providers.PVCMetricData{}, err
 	}
 
 	return metric, nil
 }
 
-func parsePrometheusResponse(response PrometheusResponse, pvc *corev1.PersistentVolumeClaim) (PrometheusPVCMetric, error) {
+func (p *PrometheusProvider) parsePrometheusResponse(response PrometheusResponse, pvc *corev1.PersistentVolumeClaim) (providers.PVCMetricData, error) {
 	// TODO: What happens when Prometheus API returns warnings?
 	switch response.Status {
 	case "error":
 		{
-			return PrometheusPVCMetric{}, fmt.Errorf("error %s in the query: %s", response.ErrorType, response.Error)
+			return providers.PVCMetricData{}, fmt.Errorf("error %s in the query: %s", response.ErrorType, response.Error)
 		}
 	case "success":
 		{
 			if len(response.Data.Result) == 0 {
-				return PrometheusPVCMetric{}, fmt.Errorf("prometheus api returned no metrics for %s/%s", pvc.Namespace, pvc.Name)
+				return providers.PVCMetricData{}, fmt.Errorf("prometheus api returned no metrics for %s/%s", pvc.Namespace, pvc.Name)
 			} else {
 				absoluteUsedStr, ok := response.Data.Result[0].Value[1].(string)
 				if !ok {
@@ -114,7 +116,7 @@ func parsePrometheusResponse(response PrometheusResponse, pvc *corev1.Persistent
 				if err != nil {
 					break
 				}
-				return PrometheusPVCMetric{
+				return providers.PVCMetricData{
 					PVCName:           response.Data.Result[0].Metric["persistentvolumeclaim"],
 					PVCNamespace:      response.Data.Result[0].Metric["namespace"],
 					PVCPercentageUsed: absoluteUsed * 100,
@@ -124,5 +126,5 @@ func parsePrometheusResponse(response PrometheusResponse, pvc *corev1.Persistent
 	}
 	errorMessage := `received an unexpected response from the Prometheus api,
 please consider opening an issue: https://github.com/lorenzophys/pvc-autoscaler/issues`
-	return PrometheusPVCMetric{}, errors.New(errorMessage)
+	return providers.PVCMetricData{}, errors.New(errorMessage)
 }
