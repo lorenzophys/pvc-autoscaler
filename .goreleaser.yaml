@@ -8,7 +8,7 @@ before:
     - go generate ./...
 builds:
   - main: ./cmd
-  - env:
+    env:
       - CGO_ENABLED=0
     goos:
       - linux
