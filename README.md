@@ -1,3 +1,10 @@
+
+[![Go Report Card](https://goreportcard.com/badge/github.com/lorenzophys/pvc-autoscaler)](https://goreportcard.com/report/github.com/lorenzophys/pvc-autoscaler)
+![GitHub release (with filter)](https://img.shields.io/github/v/release/lorenzophys/pvc-autoscaler?filter=v*&logo=Go)
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/lorenzophys/pvc-autoscaler/helm-lint-test.yaml?logo=helm&label=Helm)
+![GitHub release (with filter)](https://img.shields.io/github/v/release/lorenzophys/pvc-autoscaler?filter=pvcautoscaler-*&logo=Helm&label=Helm%20release)
+![GitHub](https://img.shields.io/github/license/lorenzophys/pvc-autoscaler)
+
 # PVC autoscaler for Kubernetes
 
 PVC Autoscaler is an open-source project aimed at providing autoscaling functionality to Persistent Volume Claims (PVCs) in Kubernetes environments. It allows you to automatically scale your PVCs based on your workloads and the metrics collected.
