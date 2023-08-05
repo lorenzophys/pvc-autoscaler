@@ -21,13 +21,13 @@ PVC Autoscaler comes with a Helm chart for easy deployment in a Kubernetes clust
 To install the PVC Autoscaler using its Helm chart, first add the repository:
 
 ```console
-helm repo add pvc-autoscaler https://lorenzophys.github.io/helm-charts
+helm repo add pvc-autoscaler https://lorenzophys.github.io/pvc-autoscaler
 ```
 
 then you can install the chart by running:
 
 ```console
-helm install <release-name> pvc-autoscaler/pvc/autoscaler -n kube-system
+helm install <release-name> pvc-autoscaler/pvcautoscaler -n kube-system
 ```
 
 Replace `<release-name>` with the name you'd like to give to this Helm release.
