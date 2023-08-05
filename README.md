@@ -16,12 +16,18 @@ Currently it only supports Prometheus for collecting metrics
 
 ## Installation
 
-PVC Autoscaler comes with a Helm chart for easy deployment in a Kubernetes cluster. You can find the chart in the `charts` directory of this repository.
+PVC Autoscaler comes with a Helm chart for easy deployment in a Kubernetes cluster.
 
-To install the PVC Autoscaler using its Helm chart, navigate to the root directory of the repository and execute the following command:
+To install the PVC Autoscaler using its Helm chart, first add the repository:
 
 ```console
-helm install <release-name> ./charts -n kube-system
+helm repo add pvc-autoscaler https://lorenzophys.github.io/helm-charts
+```
+
+then you can install the chart by running:
+
+```console
+helm install <release-name> pvc-autoscaler/pvc/autoscaler -n kube-system
 ```
 
 Replace `<release-name>` with the name you'd like to give to this Helm release.
