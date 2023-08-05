@@ -1,5 +1,5 @@
-
 [![Go Report Card](https://goreportcard.com/badge/github.com/lorenzophys/pvc-autoscaler)](https://goreportcard.com/report/github.com/lorenzophys/pvc-autoscaler)
+![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/lorenzophys/pvc-autoscaler/go-lint-test-build.yaml?logo=Go)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/lorenzophys/pvc-autoscaler?filter=v*&logo=Go)
 ![GitHub Workflow Status (with event)](https://img.shields.io/github/actions/workflow/status/lorenzophys/pvc-autoscaler/helm-lint-test.yaml?logo=helm&label=Helm)
 ![GitHub release (with filter)](https://img.shields.io/github/v/release/lorenzophys/pvc-autoscaler?filter=pvcautoscaler-*&logo=Helm&label=Helm%20release)
