@@ -1,4 +1,4 @@
-name: Go
+name: Go format, vet, test and build
 
 on: pull_request
 
