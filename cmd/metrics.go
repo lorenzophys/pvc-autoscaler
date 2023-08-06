@@ -3,15 +3,15 @@ package main
 import (
 	"fmt"
 
-	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_providers/prometheus"
-	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_providers/providers"
+	clients "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
+	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/prometheus"
 )
 
-func MetricsProviderFactory(providerName string) (providers.MetricsProvider, error) {
-	switch providerName {
+func MetricsClientFactory(clientName string) (clients.MetricsClient, error) {
+	switch clientName {
 	case "prometheus":
-		return &prometheus.PrometheusProvider{}, nil
+		return &prometheus.PrometheusClient{}, nil
 	default:
-		return nil, fmt.Errorf("unknown metrics provider: %s", providerName)
+		return nil, fmt.Errorf("unknown metrics client: %s", clientName)
 	}
 }

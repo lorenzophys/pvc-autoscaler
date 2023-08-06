@@ -1,38 +1,35 @@
 package main
 
 import (
-	"fmt"
-	"sync"
+	"context"
 	"time"
 
-	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_providers/providers"
+	providers "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
 	log "github.com/sirupsen/logrus"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/util/workqueue"
 )
 
 const (
-	PVCAutoscalerAnnotation       = "pvc-autoscaler.lorenzophys.io"
-	PVCAutoscalerStatusAnnotation = "pvc-autoscaler.lorenzophys.io/status"
-	PVCMetricsProvider            = "prometheus"
-)
+	PVCAutoscalerAnnotationPrefix           = "pvc-autoscaler.lorenzophys.io/"
+	PVCAutoscalerEnabledAnnotation          = PVCAutoscalerAnnotationPrefix + "enabled"
+	PVCAutoscalerThresholdAnnotation        = PVCAutoscalerAnnotationPrefix + "threshold"
+	PVCAutoscalerCeilingAnnotation          = PVCAutoscalerAnnotationPrefix + "ceiling"
+	PVCAutoscalerIncreaseAnnotation         = PVCAutoscalerAnnotationPrefix + "increase"
+	PVCAutoscalerPreviousCapacityAnnotation = PVCAutoscalerAnnotationPrefix + "previous_capacity"
 
-type Config struct {
-	thresholdPercentage float64
-	expansion           float64
-	pollingInterval     time.Duration
-	retryAfter          time.Duration
-}
+	PVCMetricsProvider = "prometheus"
+
+	DefaultThreshold = "80%"
+	DefaultIncrease  = "20%"
+
+	DefaultReconcileTimeOut = 1 * time.Minute
+)
 
 type PVCAutoscaler struct {
 	kubeClient      kubernetes.Interface
-	metricsProvider providers.MetricsProvider
-	config          Config
+	metricsClient   providers.MetricsClient
 	logger          *log.Logger
-	pvcsToWatch     *sync.Map
-	resizingPVCs    *sync.Map
-	pvcsQueue       workqueue.RateLimitingInterface
+	pollingInterval time.Duration
 }
 
 func main() {
@@ -46,60 +43,30 @@ func main() {
 	}
 	logger.Info("new kubernetes client created")
 
-	metricsProvider, err := MetricsProviderFactory(PVCMetricsProvider)
+	metricsClient, err := MetricsClientFactory(PVCMetricsProvider)
 	if err != nil {
 		logger.Fatalf("metrics provider error: %s", err)
 	}
 
 	logger.Info("new metrics provider created")
 
-	config := Config{
-		thresholdPercentage: 80,
-		expansion:           0.2,
-		pollingInterval:     10 * time.Second,
-		retryAfter:          time.Minute,
-	}
-
 	pvcAutoscaler := &PVCAutoscaler{
 		kubeClient:      kubeClient,
-		metricsProvider: metricsProvider,
-		config:          config,
+		metricsClient:   metricsClient,
 		logger:          logger,
-		pvcsToWatch:     &sync.Map{},
-		resizingPVCs:    &sync.Map{},
-		pvcsQueue:       workqueue.NewRateLimitingQueueWithConfig(workqueue.DefaultControllerRateLimiter(), workqueue.RateLimitingQueueConfig{}),
+		pollingInterval: 10 * time.Second,
 	}
 
-	err = pvcAutoscaler.fetchPVCsToWatch()
-	if err != nil {
-		logger.Fatalf("failed to fetch PersistentVolumeClaims: %s", err.Error())
-	}
-
-	pvcAutoscaler.startPVCInformer()
-	logger.Info("new informer started watching PersistentVolumeClaims resources")
-
-	go pvcAutoscaler.processPVCs()
-
-	ticker := time.NewTicker(pvcAutoscaler.config.pollingInterval)
+	ticker := time.NewTicker(pvcAutoscaler.pollingInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		pvcAutoscaler.pvcsToWatch.Range(func(key, value any) bool {
-			pvc := value.(*corev1.PersistentVolumeClaim)
-			pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
+		ctx, cancel := context.WithTimeout(context.Background(), DefaultReconcileTimeOut)
+		defer cancel()
 
-			metric, err := metricsProvider.QueryPVCUsage(pvc)
-			if err != nil {
-				logger.Error(err)
-			} else {
-				logger.Infof("utilization of %s: %.2f%%", pvcId, metric.PVCPercentageUsed)
-			}
-
-			if metric.PVCPercentageUsed >= pvcAutoscaler.config.thresholdPercentage {
-				pvcAutoscaler.pvcsQueue.Add(pvc)
-				logger.Infof("pvc %s queued for resizing", pvcId)
-			}
-			return true
-		})
+		err := pvcAutoscaler.reconcile(ctx)
+		if err != nil {
+			pvcAutoscaler.logger.Errorf("failed to reconcile: %v", err)
+		}
 	}
 }
