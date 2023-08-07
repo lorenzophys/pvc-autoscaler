@@ -4,7 +4,7 @@ metadata:
   name: {{ include "pvcautoscaler.fullname" . }}
   labels:
     {{- include "pvcautoscaler.labels" . | nindent 4 }}
-    {{- with .Values.extraLabels }}
+    {{- with .Values.pvcAutoscaler.extraLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:
@@ -21,4 +21,12 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - /pvc-autoscaler
+          args:
+            - --metrics-client={{ .Values.pvcAutoscaler.args.metricsClient }}
+            - --metrics-client-url={{ .Values.pvcAutoscaler.args.metricsClientURL }}
+            - --polling-interval={{ .Values.pvcAutoscaler.args.pollingInterval }}
+            - --reconcile-timeout={{ .Values.pvcAutoscaler.args.reconcileTimeout }}
+            - --log-level={{ .Values.pvcAutoscaler.args.logger.logLevel }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}

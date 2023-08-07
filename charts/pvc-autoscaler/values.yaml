@@ -1,7 +1,34 @@
 image:
+  # image.repository -- pvc-autoscaler image repository to use.
   repository: lorenzophys/pvc-autoscaler
-  pullPolicy: IfNotPresent
+
+  # image.tag -- pvc-autoscaler image tag to use.
   tag: "latest"
 
-resources: {}
-extraLabels: {}
+  # image.pullPolicy -- pvc-autoscaler image pullPolicy.
+  pullPolicy: Always
+
+pvcAutoscaler:
+  args:
+    # pvcAutoscaler.args.metricsClient -- Specify the metrics client to use to query volume stats.
+    # Used as "--metrics-client" option
+    metricsClient: "prometheus"
+
+    # pvcAutoscaler.args.metricsClientURL -- Specify metrics client URL to query volume stats.
+    # Used as "--metrics-client-url" option
+    metricsClientURL: http://prometheus-server.monitoring.svc.cluster.local
+
+    # pvcAutoscaler.args.pollingInterval -- Specify how often to check pvc stats.
+    # Used as "--polling-interval" option
+    pollingInterval: 30s
+
+    # pvcAutoscaler.args.reconcileTimeout -- Specify the time after which the reconciliation is considered failed.
+    # Used as "--reconcile-timeout" option
+    reconcileTimeout: 30s
+
+    logger:
+       # pvcAutoscaler.logger.logLevel -- Specify the log level.
+      logLevel: "INFO"
+
+    # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
+    extraLabels: {}
