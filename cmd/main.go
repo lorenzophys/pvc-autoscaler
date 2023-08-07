@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"os"
 	"time"
 
 	providers "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
+	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
@@ -23,6 +25,8 @@ const (
 	DefaultIncrease  = "20%"
 
 	DefaultReconcileTimeOut = 1 * time.Minute
+
+	LogLevel = logrus.InfoLevel
 )
 
 type PVCAutoscaler struct {
@@ -34,7 +38,12 @@ type PVCAutoscaler struct {
 
 func main() {
 	var (
-		logger = log.New()
+		logger = &logrus.Logger{
+			Out:       os.Stderr,
+			Formatter: new(logrus.TextFormatter),
+			Hooks:     make(logrus.LevelHooks),
+			Level:     LogLevel,
+		}
 	)
 
 	kubeClient, err := newKubeClient()
@@ -45,22 +54,23 @@ func main() {
 
 	metricsClient, err := MetricsClientFactory(PVCMetricsProvider)
 	if err != nil {
-		logger.Fatalf("metrics provider error: %s", err)
+		logger.Fatalf("metrics client error: %s", err)
 	}
 
-	logger.Info("new metrics provider created")
+	logger.Info("new metrics client created")
 
 	pvcAutoscaler := &PVCAutoscaler{
 		kubeClient:      kubeClient,
 		metricsClient:   metricsClient,
 		logger:          logger,
-		pollingInterval: 10 * time.Second,
+		pollingInterval: 30 * time.Second,
 	}
 
 	ticker := time.NewTicker(pvcAutoscaler.pollingInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
+		pvcAutoscaler.logger.Debug("tick")
 		ctx, cancel := context.WithTimeout(context.Background(), DefaultReconcileTimeOut)
 		defer cancel()
 

@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/labels"
 )
 
 func (a *PVCAutoscaler) isStorageClassExpandable(ctx context.Context, scName string) (bool, error) {
@@ -24,16 +24,25 @@ func (a *PVCAutoscaler) isStorageClassExpandable(ctx context.Context, scName str
 }
 
 func (a *PVCAutoscaler) getAnnotatedPVCs(ctx context.Context) (*corev1.PersistentVolumeClaimList, error) {
-	autoscalerEnabledSelector := labels.Set{PVCAutoscalerEnabledAnnotation: "true"}.AsSelector()
-
-	pvcl, err := a.kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{
-		LabelSelector: autoscalerEnabledSelector.String(),
-	})
+	pvcList, err := a.kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
 
-	return pvcl, nil
+	var filteredPVCs []v1.PersistentVolumeClaim
+	for _, pvc := range pvcList.Items {
+		if value, ok := pvc.Annotations[PVCAutoscalerEnabledAnnotation]; ok && value == "true" {
+			filteredPVCs = append(filteredPVCs, pvc)
+		}
+	}
+
+	return &v1.PersistentVolumeClaimList{
+		TypeMeta: metav1.TypeMeta{
+			Kind:       "PersistentVolumeClaimList",
+			APIVersion: "v1",
+		},
+		Items: filteredPVCs,
+	}, nil
 }
 
 func getPVCStorageCeiling(pvc *corev1.PersistentVolumeClaim) (resource.Quantity, error) {
@@ -55,7 +64,7 @@ func convertPercentageToBytes(value string, capacity int64, defaultValue string)
 			return 0, err
 		}
 		if perc < 0 || perc > 100 {
-			return 0, fmt.Errorf("annotation value %q should between 0%% and 100%%", value)
+			return 0, fmt.Errorf("annotation value %s should between 0%% and 100%%", value)
 		}
 
 		res := int64(float64(capacity) * perc / 100.0)
