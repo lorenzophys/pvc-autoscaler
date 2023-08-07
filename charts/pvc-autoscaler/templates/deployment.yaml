@@ -4,7 +4,7 @@ metadata:
   name: {{ include "pvcautoscaler.fullname" . }}
   labels:
     {{- include "pvcautoscaler.labels" . | nindent 4 }}
-    {{- with .Values.extraLabels }}
+    {{- with .Values.pvcAutoscaler.extraLabels }}
     {{- toYaml . | nindent 4 }}
     {{- end }}
 spec:

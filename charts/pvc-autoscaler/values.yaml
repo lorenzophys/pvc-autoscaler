@@ -30,5 +30,5 @@ pvcAutoscaler:
        # pvcAutoscaler.logger.logLevel -- Specify the log level.
       logLevel: "INFO"
 
-# -- extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
-extraLabels: {}
+    # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
+    extraLabels: {}
