@@ -17,8 +17,6 @@ The motivation behind the PVC Autoscaler project is to provide developers with a
 
 ## Limitations
 
-At this stage of development only one update is possible per PVC. This is due to the fact that different storage types of different cloud providers have constraints on multiple resizing that need to be researched.
-
 Currently it only supports Prometheus for collecting metrics
 
 ## Installation
