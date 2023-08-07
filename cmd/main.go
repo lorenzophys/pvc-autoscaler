@@ -2,10 +2,12 @@ package main
 
 import (
 	"context"
+	"flag"
 	"os"
+	"strings"
 	"time"
 
-	providers "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
+	clients "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
@@ -18,64 +20,79 @@ const (
 	PVCAutoscalerIncreaseAnnotation         = PVCAutoscalerAnnotationPrefix + "increase"
 	PVCAutoscalerPreviousCapacityAnnotation = PVCAutoscalerAnnotationPrefix + "previous_capacity"
 
-	PVCMetricsProvider = "prometheus"
-
 	DefaultThreshold = "80%"
 	DefaultIncrease  = "20%"
 
 	DefaultReconcileTimeOut = 1 * time.Minute
-
-	LogLevel = log.InfoLevel
+	DefaultPollingInterval  = 30 * time.Second
+	DefaultLogLevel         = "INFO"
+	DefaultMetricsProvider  = "prometheus"
 )
 
 type PVCAutoscaler struct {
 	kubeClient      kubernetes.Interface
-	metricsClient   providers.MetricsClient
+	metricsClient   clients.MetricsClient
 	logger          *log.Logger
 	pollingInterval time.Duration
 }
 
 func main() {
-	var (
-		logger = &log.Logger{
-			Out:       os.Stderr,
-			Formatter: new(log.TextFormatter),
-			Hooks:     make(log.LevelHooks),
-			Level:     LogLevel,
-		}
-	)
+	metricsClient := flag.String("metrics-client", DefaultMetricsProvider, "specify the metrics client to use to query volume stats")
+	metricsClientURL := flag.String("metrics-client-url", "", "Specify the metrics client URL to use to query volume stats")
+	pollingInterval := flag.Duration("polling-interval", DefaultPollingInterval, "specify how often to check pvc stats")
+	reconcileTimeout := flag.Duration("reconcile-timeout", DefaultReconcileTimeOut, "specify the time after which the reconciliation is considered failed")
+	logLevel := flag.String("log-level", DefaultLogLevel, "specify the log level")
+
+	var loggerLevel log.Level
+	switch strings.ToLower(*logLevel) {
+	case "INFO":
+		loggerLevel = log.InfoLevel
+	case "DEBUG":
+		loggerLevel = log.DebugLevel
+	default:
+		loggerLevel = log.InfoLevel
+	}
+
+	logger := &log.Logger{
+		Out:       os.Stderr,
+		Formatter: new(log.JSONFormatter),
+		Hooks:     make(log.LevelHooks),
+		Level:     loggerLevel,
+	}
 
 	kubeClient, err := newKubeClient()
 	if err != nil {
 		logger.Fatalf("an error occurred while creating the Kubernetes client: %s", err)
 	}
-	logger.Info("new kubernetes client created")
+	logger.Info("kubernetes client ready")
 
-	metricsClient, err := MetricsClientFactory(PVCMetricsProvider)
+	PVCMetricsClient, err := MetricsClientFactory(*metricsClient, *metricsClientURL)
 	if err != nil {
 		logger.Fatalf("metrics client error: %s", err)
 	}
 
-	logger.Info("new metrics client created")
+	logger.Infof("metrics client (%s) ready", *metricsClient)
 
 	pvcAutoscaler := &PVCAutoscaler{
 		kubeClient:      kubeClient,
-		metricsClient:   metricsClient,
+		metricsClient:   PVCMetricsClient,
 		logger:          logger,
-		pollingInterval: 30 * time.Second,
+		pollingInterval: *pollingInterval,
 	}
+
+	logger.Info("pvc-autoscaler ready")
 
 	ticker := time.NewTicker(pvcAutoscaler.pollingInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
-		pvcAutoscaler.logger.Debug("tick")
-		ctx, cancel := context.WithTimeout(context.Background(), DefaultReconcileTimeOut)
-		defer cancel()
+		ctx, cancel := context.WithTimeout(context.Background(), *reconcileTimeout)
 
 		err := pvcAutoscaler.reconcile(ctx)
 		if err != nil {
 			pvcAutoscaler.logger.Errorf("failed to reconcile: %v", err)
 		}
+
+		cancel()
 	}
 }

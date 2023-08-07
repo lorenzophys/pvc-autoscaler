@@ -13,18 +13,18 @@ import (
 )
 
 func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
-	pvcl, err := a.getAnnotatedPVCs(ctx)
+	pvcl, err := getAnnotatedPVCs(ctx, a.kubeClient)
 	if err != nil {
 		return fmt.Errorf("could not get PersistentVolumeClaims: %w", err)
 	}
-	a.logger.Debug("fetched annotated pvcs")
+	a.logger.Debugf("fetched %d annotated pvcs", pvcl.Size())
 
 	pvcsMetrics, err := a.metricsClient.FetchPVCsMetrics(ctx)
 	if err != nil {
 		a.logger.Errorf("could not fetch the PersistentVolumeClaims metrics: %v", err)
 		return nil
 	}
-	a.logger.Debug("fetched metrics")
+	a.logger.Debug("fetched pvc metrics")
 
 	for _, pvc := range pvcl.Items {
 		pvcId := fmt.Sprintf("%s/%s", pvc.Namespace, pvc.Name)
@@ -32,7 +32,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 
 		// Determine if the StorageClass allows volume expansion
 		storageClassName := *pvc.Spec.StorageClassName
-		isExpandable, err := a.isStorageClassExpandable(ctx, storageClassName)
+		isExpandable, err := isStorageClassExpandable(ctx, a.kubeClient, storageClassName)
 		if err != nil {
 			a.logger.Errorf("could not get StorageClass %s for %s: %v", storageClassName, pvcId, err)
 			continue
@@ -41,7 +41,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 			a.logger.Errorf("the StorageClass %s of %s does not allow volume expansion", storageClassName, pvcId)
 			continue
 		}
-		a.logger.Debugf("storageclass for %s ok", pvcId)
+		a.logger.Debugf("storageclass for %s allows volume expansion", pvcId)
 
 		// Determine if pvc the meets the condition for resize
 		err = isPVCResizable(&pvc)
@@ -49,7 +49,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 			a.logger.Errorf("the PersistentVolumeClaim %s is not resizable: %v", pvcId, err)
 			continue
 		}
-		a.logger.Debugf("pvc %s resizable", pvcId)
+		a.logger.Debugf("pvc %s meets the resizing conditions", pvcId)
 
 		namespacedName := types.NamespacedName{
 			Namespace: pvc.Namespace,
@@ -59,7 +59,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 			a.logger.Errorf("could not fetch the metrics for %s", pvcId)
 			continue
 		}
-		a.logger.Debugf("metrics for %s ok", pvcId)
+		a.logger.Debugf("metrics for %s received", pvcId)
 
 		pvcCurrentCapacityBytes := pvcsMetrics[namespacedName].VolumeCapacityBytes
 
@@ -89,7 +89,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 		if exist {
 			parsedPreviousCapacity, err := strconv.ParseInt(previousCapacity, 10, 64)
 			if err != nil {
-				a.logger.Errorf("failed to parse \"previous_capacity\" annotation: %v", err)
+				a.logger.Errorf("failed to parse 'previous_capacity' annotation: %v", err)
 				continue
 			}
 			if parsedPreviousCapacity == pvcCurrentCapacityBytes {
@@ -107,13 +107,13 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 			continue
 		}
 		if capacity.Cmp(ceiling) >= 0 {
-			a.logger.Infof("volume storage limit reached for %s", pvcId)
+			a.logger.Infof("volume storage limit (%s) reached for %s", ceiling.String(), pvcId)
 			continue
 		}
 
 		currentUsedBytes := pvcsMetrics[namespacedName].VolumeUsedBytes
 		if currentUsedBytes >= threshold {
-			a.logger.Debugf("pvc %s usege bigger than threshold", pvcId)
+			a.logger.Infof("pvc %s usage bigger than threshold", pvcId)
 
 			// 1<<30 is a bit shift operation that represents 2^30, i.e. 1Gi
 			newStorageBytes := int64(math.Ceil(float64(capacity.Value()+increase)/(1<<30))) << 30
@@ -137,15 +137,16 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 func (a *PVCAutoscaler) updatePVCWithNewStorageSize(ctx context.Context, pvcToResize *corev1.PersistentVolumeClaim, capacityBytes int64, newStorageBytes *resource.Quantity) error {
 	pvcId := fmt.Sprintf("%s/%s", pvcToResize.Namespace, pvcToResize.Name)
 
-	a.logger.Debugf("update storage for %s ok", pvcId)
-
 	pvcToResize.Spec.Resources.Requests[corev1.ResourceStorage] = *newStorageBytes
 
 	pvcToResize.Annotations[PVCAutoscalerPreviousCapacityAnnotation] = strconv.FormatInt(capacityBytes, 10)
+	a.logger.Debugf("PVCAutoscalerPreviousCapacityAnnotation annotation written for %s ok", pvcId)
+
 	_, err := a.kubeClient.CoreV1().PersistentVolumeClaims(pvcToResize.Namespace).Update(ctx, pvcToResize, metav1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update PVC %s: %w", pvcId, err)
 	}
+	a.logger.Debugf("update function called and returned no error for %s ok", pvcId)
 
 	return nil
 }

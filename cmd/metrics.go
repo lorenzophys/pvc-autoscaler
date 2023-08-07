@@ -7,10 +7,10 @@ import (
 	"github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/prometheus"
 )
 
-func MetricsClientFactory(clientName string) (clients.MetricsClient, error) {
+func MetricsClientFactory(clientName, clientUrl string) (clients.MetricsClient, error) {
 	switch clientName {
 	case "prometheus":
-		prometheusClient, err := prometheus.NewPrometheusClient("http://prometheus-server.monitoring.svc.cluster.local")
+		prometheusClient, err := prometheus.NewPrometheusClient(clientUrl)
 		if err != nil {
 			return nil, err
 		}

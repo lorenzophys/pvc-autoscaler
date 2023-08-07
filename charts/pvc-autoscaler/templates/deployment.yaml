@@ -21,4 +21,10 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          args:
+            - --metrics-client={{ .Values.pvcAutoscaler.args.metricsClient }}
+            - --metrics-client-url={{ .Values.pvcAutoscaler.args.metricsClientURL }}
+            - --polling-interval={{ .Values.pvcAutoscaler.args.pollingInterval }}
+            - --reconcile-timeout={{ .Values.pvcAutoscaler.args.reconcileTimeout }}
+            - --log-level={{ .Values.pvcAutoscaler.args.logger.logLevel }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}

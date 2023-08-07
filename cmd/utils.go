@@ -10,10 +10,11 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
-func (a *PVCAutoscaler) isStorageClassExpandable(ctx context.Context, scName string) (bool, error) {
-	sc, err := a.kubeClient.StorageV1().StorageClasses().Get(ctx, scName, metav1.GetOptions{})
+func isStorageClassExpandable(ctx context.Context, kubeClient kubernetes.Interface, scName string) (bool, error) {
+	sc, err := kubeClient.StorageV1().StorageClasses().Get(ctx, scName, metav1.GetOptions{})
 	if err != nil {
 		return false, err
 	}
@@ -22,8 +23,8 @@ func (a *PVCAutoscaler) isStorageClassExpandable(ctx context.Context, scName str
 	return isExpandable, nil
 }
 
-func (a *PVCAutoscaler) getAnnotatedPVCs(ctx context.Context) (*corev1.PersistentVolumeClaimList, error) {
-	pvcList, err := a.kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
+func getAnnotatedPVCs(ctx context.Context, kubeClient kubernetes.Interface) (*corev1.PersistentVolumeClaimList, error) {
+	pvcList, err := kubeClient.CoreV1().PersistentVolumeClaims("").List(ctx, metav1.ListOptions{})
 	if err != nil {
 		return nil, err
 	}
