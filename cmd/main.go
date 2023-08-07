@@ -6,7 +6,6 @@ import (
 	"time"
 
 	providers "github.com/lorenzophys/pvc-autoscaler/internal/metrics_clients/clients"
-	"github.com/sirupsen/logrus"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/client-go/kubernetes"
 )
@@ -26,7 +25,7 @@ const (
 
 	DefaultReconcileTimeOut = 1 * time.Minute
 
-	LogLevel = logrus.InfoLevel
+	LogLevel = log.InfoLevel
 )
 
 type PVCAutoscaler struct {
@@ -38,10 +37,10 @@ type PVCAutoscaler struct {
 
 func main() {
 	var (
-		logger = &logrus.Logger{
+		logger = &log.Logger{
 			Out:       os.Stderr,
-			Formatter: new(logrus.TextFormatter),
-			Hooks:     make(logrus.LevelHooks),
+			Formatter: new(log.TextFormatter),
+			Hooks:     make(log.LevelHooks),
 			Level:     LogLevel,
 		}
 	)

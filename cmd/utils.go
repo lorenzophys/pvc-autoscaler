@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	corev1 "k8s.io/api/core/v1"
-	v1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -29,14 +28,14 @@ func (a *PVCAutoscaler) getAnnotatedPVCs(ctx context.Context) (*corev1.Persisten
 		return nil, err
 	}
 
-	var filteredPVCs []v1.PersistentVolumeClaim
+	var filteredPVCs []corev1.PersistentVolumeClaim
 	for _, pvc := range pvcList.Items {
 		if value, ok := pvc.Annotations[PVCAutoscalerEnabledAnnotation]; ok && value == "true" {
 			filteredPVCs = append(filteredPVCs, pvc)
 		}
 	}
 
-	return &v1.PersistentVolumeClaimList{
+	return &corev1.PersistentVolumeClaimList{
 		TypeMeta: metav1.TypeMeta{
 			Kind:       "PersistentVolumeClaimList",
 			APIVersion: "v1",
