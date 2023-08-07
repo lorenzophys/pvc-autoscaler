@@ -10,9 +10,9 @@ COPY internal /go/pvc-autoscaler/internal
 
 RUN --mount=type=cache,id=gomod,target=/go/pkg/mod \
     --mount=type=cache,id=gobuild,target=/root/.cache/go-build \
-    GOOS=linux CGO_ENABLED=0 go build -v -o /go/bin/app /go/pvc-autoscaler/cmd
+    GOOS=linux CGO_ENABLED=0 go build -v -o /go/bin/pvc-autoscaler /go/pvc-autoscaler/cmd
 
 
 FROM gcr.io/distroless/static-debian11
-COPY --from=build /go/bin/app /
-CMD ["/app"]
+COPY --from=build /go/bin/pvc-autoscaler /
+ENTRYPOINT ["/pvc-autoscaler"]

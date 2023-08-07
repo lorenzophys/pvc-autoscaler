@@ -95,9 +95,6 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 			if parsedPreviousCapacity == pvcCurrentCapacityBytes {
 				a.logger.Infof("pvc %s is still waiting to accept the resize", pvcId)
 				continue
-			} else if parsedPreviousCapacity < pvcCurrentCapacityBytes {
-				a.logger.Infof("pvc %s accepted the resize", pvcId)
-				continue
 			}
 		}
 

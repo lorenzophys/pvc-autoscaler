@@ -43,6 +43,8 @@ func main() {
 	reconcileTimeout := flag.Duration("reconcile-timeout", DefaultReconcileTimeOut, "specify the time after which the reconciliation is considered failed")
 	logLevel := flag.String("log-level", DefaultLogLevel, "specify the log level")
 
+	flag.Parse()
+
 	var loggerLevel log.Level
 	switch strings.ToLower(*logLevel) {
 	case "INFO":
@@ -71,7 +73,7 @@ func main() {
 		logger.Fatalf("metrics client error: %s", err)
 	}
 
-	logger.Infof("metrics client (%s) ready", *metricsClient)
+	logger.Infof("metrics client (%s) ready at address %s", *metricsClient, *metricsClientURL)
 
 	pvcAutoscaler := &PVCAutoscaler{
 		kubeClient:      kubeClient,

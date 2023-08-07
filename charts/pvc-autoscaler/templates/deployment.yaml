@@ -21,6 +21,8 @@ spec:
       containers:
         - name: {{ .Chart.Name }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          command:
+            - /pvc-autoscaler
           args:
             - --metrics-client={{ .Values.pvcAutoscaler.args.metricsClient }}
             - --metrics-client-url={{ .Values.pvcAutoscaler.args.metricsClientURL }}

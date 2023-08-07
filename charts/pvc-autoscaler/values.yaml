@@ -16,7 +16,7 @@ pvcAutoscaler:
 
     # pvcAutoscaler.args.metricsClientURL -- Specify metrics client URL to query volume stats.
     # Used as "--metrics-client-url" option
-    metricsClientURL: "http://prometheus-server.monitoring.svc.cluster.local"
+    metricsClientURL: http://prometheus-server.monitoring.svc.cluster.local
 
     # pvcAutoscaler.args.pollingInterval -- Specify how often to check pvc stats.
     # Used as "--polling-interval" option
