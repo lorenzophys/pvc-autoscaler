@@ -13,11 +13,23 @@ Please note that PVC Autoscaler is currently in a heavy development phase. As su
 
 ## Motivation
 
-The motivation behind the PVC Autoscaler project is to provide developers with an easy and efficient way of managing storage resources within their Kubernetes clusters. With the PVC Autoscaler, there's no need to manually adjust the size of your PVCs as your storage needs change. The Autoscaler handles this for you, freeing you up to focus on other areas of your development work.
+The motivation behind the PVC Autoscaler project is to provide developers with an easy and efficient way of managing storage resources within their Kubernetes clusters: sometimes is difficult to estimate how much storage an application needs. With the PVC Autoscaler, there's no need to manually adjust the size of your PVCs as your storage needs change. The Autoscaler handles this for you, freeing you up to focus on other areas of your development work.
+
+## How it works
+
+![pvc-autoscaler-architecture](https://github.com/lorenzophys/pvc-autoscaler/assets/63981558/5dce9455-c7e1-49df-ba1c-4f88964139a3)
 
 ## Limitations
 
 Currently it only supports Prometheus for collecting metrics
+
+## Requirements
+
+1. Managed Kubernetes cluster (EKS, AKS, etc...)
+2. CSI driver that supports [`VolumeExpansion`](https://kubernetes.io/docs/concepts/storage/persistent-volumes/#csi-volume-expansion)
+3. A storage class with the `allowVolumeExpansion` field set to `true`
+4. Only volumes with `Filesystem` mode are supported
+5. A metrics collector (default: [Prometheus](https://github.com/prometheus-community/helm-charts))
 
 ## Installation
 
@@ -37,9 +49,9 @@ helm install <release-name> pvc-autoscaler/pvcautoscaler -n kube-system
 
 Replace `<release-name>` with the name you'd like to give to this Helm release.
 
-## Testing
+## Usage
 
-To test PVC Autoscaler, you'll need a Kubernetes cluster that supports expandable storage classes, i.e. it contains `allowVolumeExpansion: true`. As an example you can consider:
+Using `pvc-autoscaler` requires a `StorageClass` that allows volume expansion, i.e. with the `allowVolumeExpansion` field set to `true`. In case of `EKS` you can define:
 
 ```yaml
 apiVersion: storage.k8s.io/v1
@@ -54,7 +66,37 @@ reclaimPolicy: Delete
 allowVolumeExpansion: true
 ```
 
-Remember that if you work with EKS you need the EBS CSI Driver. Please refer to [this page](https://docs.aws.amazon.com/eks/latest/userguide/ebs-csi.html) for mor info.
+Then set up the `PersistentVolumeClaim` based on the following example:
+
+```yaml
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: my-pvc
+  annotations:
+    pvc-autoscaler.lorenzophys.io/enabled: "true"
+    pvc-autoscaler.lorenzophys.io/threshold: 80%
+    pvc-autoscaler.lorenzophys.io/ceiling: 20Gi
+    pvc-autoscaler.lorenzophys.io/increase: 20%
+spec:
+  accessModes:
+    - ReadWriteOnce
+  storageClassName: gp3-expandable
+  volumeMode: Filesystem
+  resources:
+    requests:
+      storage: 10Gi
+```
+
+* set `spec.storageClassName` to the name of the expandable `StorageClass` defined above
+* make sure `spec.volumeMode` is set to `Filesystem` (if you have a block storage this won't work)
+
+Then setup `metadata.annotations` this way:
+
+* to enable autoscaling set `metadata.annotations.pvc-autoscaler.lorenzophys.io/enabled` to `"true"`
+* the `metadata.annotations.pvc-autoscaler.lorenzophys.io/threshold` annotation fixes the volume usage above which the resizing will be triggered (default: 80%)
+* set how much to increase via `metadata.annotations.pvc-autoscaler.lorenzophys.io/increase` (default 20%)
+* to avoid infinite scaling you can set a maximum size for your volume via `metadata.annotations.pvc-autoscaler.lorenzophys.io/ceiling` (default: max size set by the volume provider)
 
 ## Contributions
 
