@@ -32,3 +32,10 @@ pvcAutoscaler:
 
     # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
     extraLabels: {}
+
+resources:
+  # Request CPU resource unit in terms of millicpu - This is minimum CPU unit request & allocated every time pod has been created
+  requestCPU: "250m"
+
+  # Request Memory resource unit - This is minimum memory request & allocated every time pod has been created
+  requestMemory: "128Mi"
