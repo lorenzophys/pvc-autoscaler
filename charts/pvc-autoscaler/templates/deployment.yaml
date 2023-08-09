@@ -32,5 +32,5 @@ spec:
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           resources:
             requests:
-              cpu: "{{ .Values.resources.requestCPU }}"
-              memory: "{{ .Values.resources.requestMemory }}"
+              cpu: "{{ .Values.pvcAutoscaler.resources.requestCPU }}"
+              memory: "{{ .Values.pvcAutoscaler.resources.requestMemory }}"
