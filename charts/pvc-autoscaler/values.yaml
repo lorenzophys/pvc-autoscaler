@@ -32,3 +32,9 @@ pvcAutoscaler:
 
     # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
     extraLabels: {}
+
+  nodeSelector: {}
+
+  tolerations: []
+
+  podAnnotations: {}
