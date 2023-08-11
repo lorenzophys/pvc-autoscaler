@@ -3,6 +3,20 @@ entries:
   pvcautoscaler:
   - apiVersion: v2
     appVersion: 0.2.0
+    created: "2023-08-11T08:45:06.308907718Z"
+    description: A Helm chart for PVCAutoscaler
+    digest: e3251e39f031980e1df41979bbd7ab93b69c02e4e66aa9deb981792c9238e310
+    maintainers:
+    - email: lorenzo.maffioli@gmail.com
+      name: lorenzophys
+      url: https://github.com/lorenzophys
+    name: pvcautoscaler
+    type: application
+    urls:
+    - https://github.com/lorenzophys/pvc-autoscaler/releases/download/pvcautoscaler-0.3.0/pvcautoscaler-0.3.0.tgz
+    version: 0.3.0
+  - apiVersion: v2
+    appVersion: 0.2.0
     created: "2023-08-07T20:02:40.226254459Z"
     description: A Helm chart for PVCAutoscaler
     digest: f5080d4c3e4af938dfe5eccd533e8e539d81f1cda65a1fd01fe9a6d17c6ba347
@@ -29,4 +43,4 @@ entries:
     urls:
     - https://github.com/lorenzophys/pvc-autoscaler/releases/download/pvcautoscaler-0.1.1/pvcautoscaler-0.1.1.tgz
     version: 0.1.1
-generated: "2023-08-07T20:02:40.226266459Z"
+generated: "2023-08-11T08:45:06.308928918Z"
