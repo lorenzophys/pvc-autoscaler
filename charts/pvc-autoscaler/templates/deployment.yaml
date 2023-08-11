@@ -30,3 +30,7 @@ spec:
             - --reconcile-timeout={{ .Values.pvcAutoscaler.args.reconcileTimeout }}
             - --log-level={{ .Values.pvcAutoscaler.args.logger.logLevel }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              cpu: "{{ .Values.pvcAutoscaler.resources.requestCPU }}"
+              memory: "{{ .Values.pvcAutoscaler.resources.requestMemory }}"

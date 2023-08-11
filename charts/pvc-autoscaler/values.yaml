@@ -32,3 +32,11 @@ pvcAutoscaler:
 
     # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
     extraLabels: {}
+
+  # pvcAutoscaler.resources -- Specify resources for pvc-autoscaler deployment
+  resources:
+    # pvcAutoscaler.resources.requestCPU -- Request CPU resource unit in terms of millicpu
+    requestCPU: "10m"
+
+    # pvcAutoscaler.resources.requestMemory -- Request memory resource unit in terms of Mi
+    requestMemory: "20Mi"
