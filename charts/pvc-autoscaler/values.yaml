@@ -36,7 +36,7 @@ pvcAutoscaler:
   # pvcAutoscaler.resources -- Specify resources for pvc-autoscaler deployment
   resources:
     # pvcAutoscaler.resources.requestCPU -- Request CPU resource unit in terms of millicpu
-    requestCPU: "250m"
+    requestCPU: "10m"
 
     # pvcAutoscaler.resources.requestMemory -- Request memory resource unit in terms of Mi
-    requestMemory: "128Mi"
+    requestMemory: "20Mi"
