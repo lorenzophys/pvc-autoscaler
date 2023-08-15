@@ -64,7 +64,7 @@ func convertPercentageToBytes(value string, capacity int64, defaultValue string)
 			return 0, err
 		}
 		if perc < 0 || perc > 100 {
-			return 0, fmt.Errorf("annotation value %s should between 0%% and 100%%", value)
+			return 0, fmt.Errorf("annotation value is %s, but should between 0%% and 100%%", value)
 		}
 
 		res := int64(float64(capacity) * perc / 100.0)
