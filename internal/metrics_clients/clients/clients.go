@@ -2,6 +2,7 @@ package providers
 
 import (
 	"context"
+	"time"
 
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -12,5 +13,5 @@ type PVCMetrics struct {
 }
 
 type MetricsClient interface {
-	FetchPVCsMetrics(context.Context) (map[types.NamespacedName]*PVCMetrics, error)
+	FetchPVCsMetrics(context.Context, time.Time) (map[types.NamespacedName]*PVCMetrics, error)
 }

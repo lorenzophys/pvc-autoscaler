@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -19,7 +20,7 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 	}
 	a.logger.Debugf("fetched %d annotated pvcs", pvcl.Size())
 
-	pvcsMetrics, err := a.metricsClient.FetchPVCsMetrics(ctx)
+	pvcsMetrics, err := a.metricsClient.FetchPVCsMetrics(ctx, time.Now())
 	if err != nil {
 		a.logger.Errorf("could not fetch the PersistentVolumeClaims metrics: %v", err)
 		return nil
