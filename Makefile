@@ -22,11 +22,11 @@ test: fmt vet ## Run go test against code.
 
 .PHONY: cov
 cov: fmt vet ## Run go test with coverage against code.
-	@go test $$(go list ./... | grep -v 'mock_*') -coverprofile=coverage.out
+	go test $$(go list ./... | grep -v 'mock_*') -coverprofile=coverage.out
 
 .PHONY: cov-html
-cov-html: cov ## Display the coverage.out in html form.
-	@go tool cover -html=coverage.out
+cov-html: ## Display the coverage.out in html form.
+	go tool cover -html=coverage.out
 
 .PHONY: build
 build: fmt vet test ## Build the autoscaler binary.

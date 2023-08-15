@@ -35,15 +35,15 @@ func NewPrometheusClient(url string) (clients.MetricsClient, error) {
 	}, nil
 }
 
-func (c *PrometheusClient) FetchPVCsMetrics(ctx context.Context) (map[types.NamespacedName]*clients.PVCMetrics, error) {
+func (c *PrometheusClient) FetchPVCsMetrics(ctx context.Context, when time.Time) (map[types.NamespacedName]*clients.PVCMetrics, error) {
 	volumeStats := make(map[types.NamespacedName]*clients.PVCMetrics)
 
-	usedBytes, err := c.getMetricValues(ctx, usedBytesQuery, time.Now())
+	usedBytes, err := c.getMetricValues(ctx, usedBytesQuery, when)
 	if err != nil {
 		return nil, err
 	}
 
-	capacityBytes, err := c.getMetricValues(ctx, capacityBytesQuery, time.Now())
+	capacityBytes, err := c.getMetricValues(ctx, capacityBytesQuery, when)
 	if err != nil {
 		return nil, err
 	}
