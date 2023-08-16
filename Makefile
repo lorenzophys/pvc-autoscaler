@@ -10,18 +10,26 @@ help: ## Display this help.
 
 .PHONY: fmt
 fmt: ## Run go fmt against code.
-	@go fmt ./...
+	@go fmt $$(go list ./... | grep -v 'mock_*')
 
 .PHONY: vet
-vet: ## Run go vet against code.
-	@go vet ./...
+vet: fmt ## Run go vet against code.
+	@go vet $$(go list ./... | grep -v 'mock_*')
 
 .PHONY: test
-test: ## Run go test against code.
-	@go test -v ./...
+test: fmt vet ## Run go test against code.
+	@go test $$(go list ./... | grep -v 'mock_*') -v
+
+.PHONY: cov
+cov: fmt vet ## Run go test with coverage against code.
+	go test $$(go list ./... | grep -v 'mock_*') -coverprofile=coverage.out
+
+.PHONY: cov-html
+cov-html: ## Display the coverage.out in html form.
+	go tool cover -html=coverage.out
 
 .PHONY: build
-build: fmt vet ## Build the autoscaler binary.
+build: fmt vet test ## Build the autoscaler binary.
 	@go build -o bin/pvc-autoscaler ./cmd
 
 .PHONY: run

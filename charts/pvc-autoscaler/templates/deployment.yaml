@@ -34,6 +34,10 @@ spec:
             - --reconcile-timeout={{ .Values.pvcAutoscaler.args.reconcileTimeout }}
             - --log-level={{ .Values.pvcAutoscaler.args.logger.logLevel }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
+          resources:
+            requests:
+              cpu: "{{ .Values.pvcAutoscaler.resources.requestCPU }}"
+              memory: "{{ .Values.pvcAutoscaler.resources.requestMemory }}"
       {{- with .Values.pvcAutoscaler.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
@@ -42,3 +46,4 @@ spec:
       tolerations:
         {{- toYaml . | nindent 8 }}
       {{- end }}
+      
