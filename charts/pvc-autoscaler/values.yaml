@@ -47,5 +47,5 @@ pvcAutoscaler:
   # pvcAutoscaler.tolerations -- Tolerations allow the scheduler to schedule pods with matching taints.
   tolerations: {}
 
-  # pvcAutoscaler.annotations -- Annotations to attach arbitrary non-identifying metadata to pods. 
+  # pvcAutoscaler.annotations -- Annotations to attach arbitrary non-identifying metadata to pods.
   annotations: []
