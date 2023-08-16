@@ -124,7 +124,9 @@ func (a *PVCAutoscaler) reconcile(ctx context.Context) error {
 				a.logger.Errorf("failed to resize pvc %s: %v", pvcId, err)
 			}
 
-			a.logger.Infof("pvc %s resized from %d to %d ", pvcId, capacity.Value(), newStorage.Value())
+			a.logger.Infof("pvc %s resized from %v to %v ", pvcId,
+				resource.NewQuantity(capacity.Value()*1024*1024*1024, resource.BinarySI),
+				resource.NewQuantity(newStorage.Value()*1024*1024*1024, resource.BinarySI))
 		}
 	}
 
