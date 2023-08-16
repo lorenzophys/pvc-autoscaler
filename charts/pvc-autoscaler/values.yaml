@@ -33,8 +33,11 @@ pvcAutoscaler:
     # pvcAutoscaler.extraLabels -- Additional labels that will be added to pvc-autoscaler Deployment.
     extraLabels: {}
 
+  # pvcAutoscaler.nodeSelector -- Kubernetes node selector to consider when scheduling pod
   nodeSelector: {}
 
-  tolerations: []
+  # pvcAutoscaler.tolerations -- Tolerations allow the scheduler to schedule pods with matching taints.
+  tolerations: {}
 
-  podAnnotations: {}
+  # pvcAutoscaler.annotations -- Annotations to attach arbitrary non-identifying metadata to pods. 
+  annotations: []
