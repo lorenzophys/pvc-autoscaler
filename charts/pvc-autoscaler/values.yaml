@@ -48,4 +48,4 @@ pvcAutoscaler:
   tolerations: {}
 
   # pvcAutoscaler.annotations -- Annotations to attach arbitrary non-identifying metadata to pods.
-  annotations: []
+  annotations: {}
