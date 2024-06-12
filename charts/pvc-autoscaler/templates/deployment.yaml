@@ -16,6 +16,10 @@ spec:
     metadata:
       labels:
         {{- include "pvcautoscaler.selectorLabels" . | nindent 8 }}
+      {{- with .Values.pvcAutoscaler.annotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
     spec:
       serviceAccountName: {{ include "pvcautoscaler.fullname" . }}
       containers:
@@ -34,3 +38,12 @@ spec:
             requests:
               cpu: "{{ .Values.pvcAutoscaler.resources.requestCPU }}"
               memory: "{{ .Values.pvcAutoscaler.resources.requestMemory }}"
+      {{- with .Values.pvcAutoscaler.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.pvcAutoscaler.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      

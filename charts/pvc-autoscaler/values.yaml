@@ -40,3 +40,12 @@ pvcAutoscaler:
 
     # pvcAutoscaler.resources.requestMemory -- Request memory resource unit in terms of Mi
     requestMemory: "20Mi"
+
+  # pvcAutoscaler.nodeSelector -- Kubernetes node selector to consider when scheduling pod
+  nodeSelector: {}
+
+  # pvcAutoscaler.tolerations -- Tolerations allow the scheduler to schedule pods with matching taints.
+  tolerations: {}
+
+  # pvcAutoscaler.annotations -- Annotations to attach arbitrary non-identifying metadata to pods.
+  annotations: {}
