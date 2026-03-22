@@ -19,7 +19,7 @@ The motivation behind the PVC Autoscaler project is to provide developers with a
 
 ## Limitations
 
-This project is **intended for educational purposes only***. It is not intended to be used in production environments.
+This project is **intended for educational purposes only**. It is not intended to be used in production environments.
 
 ## Requirements
 
